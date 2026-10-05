@@ -1,0 +1,109 @@
+import rclpy
+from rclpy.node import Node
+
+from geometry_msgs.msg import Twist
+from std_msgs.msg import Float64
+
+
+class ForwardKinematics(Node):
+
+    def __init__(self):
+        super().__init__('forward_kinematics')
+
+        # Parameter robot
+        self.wheel_radius = 0.03
+        self.wheel_separation = 0.17
+
+        # Variabel kecepatan roda
+        self.phi_L = 0.0
+        self.phi_R = 0.0
+
+        # Subscriber roda kiri
+        self.create_subscription(
+            Float64,
+            '/left_wheel/velocity',
+            self.left_callback,
+            10
+        )
+
+        # Subscriber roda kanan
+        self.create_subscription(
+            Float64,
+            '/right_wheel/velocity',
+            self.right_callback,
+            10
+        )
+
+        # Publisher hasil Forward Kinematics
+        self.velocity_publisher = self.create_publisher(
+            Twist,
+            '/forward_kinematics',
+            10
+        )
+
+        self.get_logger().info('Forward Kinematics aktif')
+
+
+    def left_callback(self, msg):
+
+        self.phi_L = msg.data
+        self.calculate_forward_kinematics()
+
+
+    def right_callback(self, msg):
+
+        self.phi_R = msg.data
+        self.calculate_forward_kinematics()
+
+
+    def calculate_forward_kinematics(self):
+
+        r = self.wheel_radius
+        s = self.wheel_separation
+
+        # =========================
+        # FORWARD KINEMATICS
+        # =========================
+
+        V = (r / 2) * (self.phi_L + self.phi_R)
+
+        omega = (r / s) * (
+            self.phi_R - self.phi_L
+        )
+
+        # Membuat pesan Twist
+        velocity_msg = Twist()
+
+        velocity_msg.linear.x = V
+        velocity_msg.linear.y = 0.0
+        velocity_msg.angular.z = omega
+
+        # Publish hasil
+        self.velocity_publisher.publish(velocity_msg)
+
+        self.get_logger().info(
+            f'phi_L={self.phi_L:.2f} rad/s | '
+            f'phi_R={self.phi_R:.2f} rad/s | '
+            f'V={V:.2f} m/s | '
+            f'omega={omega:.2f} rad/s'
+        )
+
+
+def main(args=None):
+
+    rclpy.init(args=args)
+
+    node = ForwardKinematics()
+
+    try:
+        rclpy.spin(node)
+
+    except KeyboardInterrupt:
+        pass
+
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
